@@ -1,14 +1,23 @@
 # LDA Web Api
 
-Código usado para el bot de confesiones.
+Código usado para la api de LDA
 
-## Desarrollo
-Este repositorio maneja su `virtualenv` y dependencias con [`pipenv`](https://github.com/kennethreitz/pipenv).
+# Endspoint
 
-* Clonar repositorio
-* Ejecutar `pipenv install`
-* Activar el `virtualenv` con `pipenv shell`
-  * Esto carga las variables en tu archivo `.env` local automáticamente
-* Desactivar con `exit`
+### /pin
 
-> Más información en la [documentación](http://pipenv.org/) de pipenv.
+Debido a que esta api está montada en un servidor de Heroku gratuita, este se duerme cada cierto tiempo. Esta ruta es utilizada para encender el servidor al momento de acceder la plataforma web y descargar las bases de datos.
+
+### /lda
+
+Ruta para ejecutar LDA. Los argumentos para esta ruta son:
+
+* token: Llave secreta que permite el acceso a la api
+* iterations: Número de iteraciones para ejecutar LDA
+* mode: Modo para ejcutar LDA. Este puede ser "LDA", "Seeded LDA", "Interactive LDA" o "Seeded & Interactive LDA"
+* alpha: Hiperparámetro de LDA
+* beta: Hiperparámetro de LDA
+* topics: Cantidad de tópicos a identificar
+* database: Base de datos a utilizar
+* nu: Hiperparámetro de LDA cuando se utiliza "Iteractive LDA" o "Seeded & Interactive LDA"
+* seeds: Lista de listas, donde cada lista contiene palabras para ser utilizadas en "Seeded LDA", "Interactive LDA" o "Seeded & Interactive LDA".
