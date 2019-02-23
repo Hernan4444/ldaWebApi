@@ -21,3 +21,10 @@ Ruta para ejecutar LDA. Los argumentos para esta ruta son:
 * database: Base de datos a utilizar
 * nu: Hiperparámetro de LDA cuando se utiliza "Iteractive LDA" o "Seeded & Interactive LDA"
 * seeds: Lista de listas, donde cada lista contiene palabras para ser utilizadas en "Seeded LDA", "Interactive LDA" o "Seeded & Interactive LDA".
+
+
+# .env
+
+Para el correcto funcionamiento de la API, se debe definir el archivo `.env` con las siguientes variables de entorno:
+
+* `token`: llave secreta a utlizar en la API para restringir el acceso
