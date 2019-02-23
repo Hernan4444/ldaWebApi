@@ -1,4 +1,4 @@
-# DCConfesionesBot
+# LDA Web Api
 
 Código usado para el bot de confesiones.
 
