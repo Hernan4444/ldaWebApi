@@ -15,7 +15,8 @@ def load_database(option=None):
     else:
         categ = None
 
-    return fetch_20newsgroups(subset='train', remove=(
+
+    return fetch_20newsgroups(data_home="data/", subset='train', remove=(
         'headers', 'footers', 'quotes'), categories=categ)
 
 

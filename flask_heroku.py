@@ -9,10 +9,11 @@ from dotenv import load_dotenv
 from flask_cors import CORS
 
 env_path = Path('.') / '.env'
-load_dotenv(dotenv_path=env_path)
+load_dotenv(dotenv_path=".env")
 
 
 TOKEN = os.getenv("token")
+print(TOKEN)
 app = Flask(__name__)
 CORS(app)
 
