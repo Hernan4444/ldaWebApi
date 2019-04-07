@@ -23,6 +23,22 @@ def pin():
     load_database()
     return "pin"
 
+@app.route("/database", methods=["POST", "GET"])
+def database():
+    files = [
+        ["NewGroups.5", "NewGroups (5 categorías)"],
+        ["NewGroups.10", "NewGroups (10 categorías)"],
+    ]
+    for file in os.listdir("data"):
+        if file.lower().endswith(".tsv"):
+            files.append([file, file[:-4]])
+    
+    response = Response(json.dumps(files),
+                        status=200,
+                        mimetype='application/json'
+                        )
+    return response
+
 
 @app.route("/lda", methods=["POST", "GET"])
 def test():
