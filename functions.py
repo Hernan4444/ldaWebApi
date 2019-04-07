@@ -3,7 +3,13 @@ import numpy as np
 import random
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.datasets import fetch_20newsgroups
+import os
 
+def load_file(filename, json_data):
+    for files in json_data["files"]:
+        if files[0] == filename:
+            with open(os.path.join("data", files[2])) as file:
+                return file.readlines()
 
 def load_database(option=None):
 
@@ -17,13 +23,17 @@ def load_database(option=None):
 
 
     return fetch_20newsgroups(data_home="data/", subset='train', remove=(
-        'headers', 'footers', 'quotes'), categories=categ)
+        'headers', 'footers', 'quotes'), categories=categ).data
 
 
-def run_lda(newsgroups_train, iterations, alpha, eta, topics):
+def run_lda(dataset, iterations, alpha, eta, topics, stop_words):
 
-    tf_vectorizer = CountVectorizer(stop_words='english', max_features=1000, min_df=2, max_df=0.9)
-    tf = tf_vectorizer.fit_transform(newsgroups_train.data)
+    if stop_words:
+        tf_vectorizer = CountVectorizer(stop_words='english', max_features=1000, min_df=2, max_df=0.9)
+    else:
+        tf_vectorizer = CountVectorizer(max_features=1000, min_df=2, max_df=0.9)
+
+    tf = tf_vectorizer.fit_transform(dataset)
 
     model = lda.LDA(n_topics=topics, n_iter=iterations, alpha=alpha, eta=eta, refresh=50)
     model.fit(tf)
@@ -38,10 +48,14 @@ def run_lda(newsgroups_train, iterations, alpha, eta, topics):
     return topics
 
 
-def run_interactive_lda(newsgroups_train, iterations, alpha, eta, nu, topics, seeds, mode):
+def run_interactive_lda(dataset, iterations, alpha, eta, nu, topics, seeds, mode, stop_words):
 
-    tf_vectorizer = CountVectorizer(stop_words='english', max_features=1000, min_df=2, max_df=0.9)
-    tf = tf_vectorizer.fit_transform(newsgroups_train.data)
+    if stop_words:
+        tf_vectorizer = CountVectorizer(stop_words='english', max_features=1000, min_df=2, max_df=0.9)
+    else:
+        tf_vectorizer = CountVectorizer(max_features=1000, min_df=2, max_df=0.9)
+
+    tf = tf_vectorizer.fit_transform(dataset)
     vocab = tf_vectorizer.get_feature_names()
 
     new_seeds = []
