@@ -59,13 +59,17 @@ def run_interactive_lda(dataset, iterations, alpha, eta, nu, topics, seeds, mode
     vocab = tf_vectorizer.get_feature_names()
 
     new_seeds = []
+    print(seeds)
 
     for constrain in seeds:
         new_topic = []
         for word in constrain:
             if word in vocab:
                 new_topic.append(vocab.index(word))
+            else:
+                print(word, constrain)
         new_seeds.append(new_topic)
+    print(new_seeds)
 
     model = lda.LDA(n_topics=topics, n_iter=iterations, alpha=alpha,
                     eta=eta, nu=nu, seed=new_seeds, refresh=100, mode=mode.lower())
