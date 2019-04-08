@@ -63,7 +63,7 @@ def run_interactive_lda(dataset, iterations, alpha, eta, nu, topics, seeds, mode
 
     for constrain in seeds:
         new_topic = []
-        for word in constrain:
+        for word in seeds[constrain]:
             if word in vocab:
                 new_topic.append(vocab.index(word))
             else:
