@@ -1,5 +1,5 @@
 # coding=utf-8
-from flask import Flask, request, json, Response
+from flask import Flask, request, json, Response, render_template
 from json import loads as load_json
 import os
 import re
@@ -23,6 +23,13 @@ ALLOWED_EXTENSIONS = set(['tsv', 'csv', 'txt'])
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+@app.route("/")
+def index():
+    with open("index.html", encoding="UTF-8") as file:
+        data = "".join(file.readlines())
+    return data
 
 
 @app.route("/pin", methods=["POST", "GET"])
