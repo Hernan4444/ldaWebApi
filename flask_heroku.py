@@ -27,7 +27,7 @@ def allowed_file(filename):
 
 @app.route("/")
 def index():
-    with open("page/index.html", encoding="UTF-8") as file:
+    with open("index.html", encoding="UTF-8") as file:
         data = "".join(file.readlines())
     return data
 
