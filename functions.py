@@ -8,7 +8,7 @@ import os
 def load_file(filename, json_data):
     for files in json_data["files"]:
         if files[0] == filename:
-            with open(os.path.join("data", files[2])) as file:
+            with open(os.path.join("data", files[2]), encoding="UTF-8") as file:
                 return file.readlines()
 
 def load_database(option=None):
