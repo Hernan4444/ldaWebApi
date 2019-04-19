@@ -34,7 +34,6 @@ def index():
 
 @app.route("/pin", methods=["POST", "GET"])
 def pin():
-    load_database()
     return "pin"
 
 
