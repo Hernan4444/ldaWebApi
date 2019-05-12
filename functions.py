@@ -38,14 +38,19 @@ def run_lda(dataset, iterations, alpha, eta, topics, stop_words):
     model = lda.LDA(n_topics=topics, n_iter=iterations, alpha=alpha, eta=eta, refresh=50)
     model.fit(tf)
 
-    topics = []
+    word_topics = []
     for topic_dist in model.topic_word_:
-        topics.append(list(zip(
+        word_topics.append(list(zip(
             ["{:0.5f}".format(x) for x in np.array(topic_dist)[np.argsort(topic_dist)][:-20:-1]],
             np.array(tf_vectorizer.get_feature_names())[np.argsort(topic_dist)][:-20:-1]
         )))
 
-    return topics
+    doc_topic = []
+    for doc_dist, doc in zip(model.doc_topic_, dataset):
+        doc_topic.append(["{:0.5f}".format(x) for x in doc_dist] + [doc.replace("\n", " ")])
+
+
+    return {"word_topic": word_topics, "doc_topic": doc_topic}
 
 
 def run_interactive_lda(dataset, iterations, alpha, eta, nu, topics, seeds, mode, stop_words):
@@ -76,11 +81,15 @@ def run_interactive_lda(dataset, iterations, alpha, eta, nu, topics, seeds, mode
                     
     model.fit(tf)
 
-    topics = []
+    word_topics = []
     for topic_dist in model.topic_word_:
-        topics.append(list(zip(
+        word_topics.append(list(zip(
             ["{:0.5f}".format(x) for x in np.array(topic_dist)[np.argsort(topic_dist)][:-20:-1]],
             np.array(tf_vectorizer.get_feature_names())[np.argsort(topic_dist)][:-20:-1]
         )))
 
-    return topics
+    doc_topic = []
+    for doc_dist, doc in zip(model.doc_topic_, dataset):
+        doc_topic.append(["{:0.5f}".format(x) for x in doc_dist] + [doc.replace("\n", " ")])
+
+    return {"word_topic": word_topics, "doc_topic": doc_topic}
