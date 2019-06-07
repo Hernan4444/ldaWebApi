@@ -4,11 +4,12 @@ import random
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.datasets import fetch_20newsgroups
 import os
+import nltk
 from nltk.tokenize import word_tokenize
 from nltk.stem import SnowballStemmer
 from string import punctuation
 
-
+nltk.download('punkt')
 non_letters = list(punctuation)
 
 #we add spanish punctuation
