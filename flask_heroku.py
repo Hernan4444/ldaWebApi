@@ -5,14 +5,14 @@ import os
 import re
 from functions import load_database, run_lda, run_interactive_lda, load_file
 from pathlib import Path  # python3 only
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 from flask_cors import CORS
 
-env_path = Path('.') / '.env'
-load_dotenv(dotenv_path=".env")
+# env_path = Path('.') / '.env'
+# load_dotenv(dotenv_path=".env")
 
 
-TOKEN = os.getenv("token")
+TOKEN = "asjkdajsalkdj123alskdlk123"
 
 app = Flask(__name__)
 CORS(app)
