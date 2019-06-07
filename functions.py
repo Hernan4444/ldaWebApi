@@ -4,6 +4,25 @@ import random
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.datasets import fetch_20newsgroups
 import os
+from nltk.tokenize import word_tokenize
+from nltk.stem import SnowballStemmer
+from string import punctuation
+
+
+non_letters = list(punctuation)
+
+#we add spanish punctuation
+non_letters.extend(['¿', '¡', '-'])
+non_letters.extend(map(str,range(10)))
+
+
+# based on http://www.cs.duke.edu/courses/spring14/compsci290/assignments/lab02.html
+stemmer = SnowballStemmer('spanish')
+def stem_tokens(tokens, stemmer):
+    stemmed = []
+    for item in tokens:
+        stemmed.append(stemmer.stem(item))
+    return stemmed
 
 def load_file(filename, json_data):
     for files in json_data["files"]:
@@ -26,14 +45,34 @@ def load_database(option=None):
         'headers', 'footers', 'quotes'), categories=categ).data
 
 
-def run_lda(dataset, iterations, alpha, eta, topics, stop_words):
+def run_lda(dataset, iterations, alpha, eta, topics, stop_words, stop_words_arrays, stemming):
+
+    new_dataset = []
+    if len(stop_words_arrays):
+        for line in dataset:
+            # remove non letters
+            text = ''.join([c.lower() for c in line if c.lower() not in non_letters])
+            text = ' '.join([c.lower() for c in text.split(" ") if c.lower() not in stop_words_arrays])
+            # tokenize
+            tokens =  word_tokenize(text)
+            line = " ".join(tokens)
+            if stemming:
+                try:
+                    stems = stem_tokens(tokens, stemmer)
+                except Exception:
+                    stems = ['']
+                line = " ".join(stems)
+
+            new_dataset.append(line)
+    else:
+        new_dataset = dataset
 
     if stop_words:
         tf_vectorizer = CountVectorizer(stop_words='english', max_features=1000, min_df=2, max_df=0.9)
     else:
         tf_vectorizer = CountVectorizer(max_features=1000, min_df=2, max_df=0.9)
 
-    tf = tf_vectorizer.fit_transform(dataset)
+    tf = tf_vectorizer.fit_transform(new_dataset)
 
     model = lda.LDA(n_topics=topics, n_iter=iterations, alpha=alpha, eta=eta, refresh=50)
     model.fit(tf)
@@ -53,14 +92,34 @@ def run_lda(dataset, iterations, alpha, eta, topics, stop_words):
     return {"word_topic": word_topics, "doc_topic": doc_topic}
 
 
-def run_interactive_lda(dataset, iterations, alpha, eta, nu, topics, seeds, mode, stop_words):
+def run_interactive_lda(dataset, iterations, alpha, eta, nu, topics, seeds, mode, stop_words, stop_words_arrays, stemming):
 
     if stop_words:
         tf_vectorizer = CountVectorizer(stop_words='english', max_features=1000, min_df=2, max_df=0.9)
     else:
         tf_vectorizer = CountVectorizer(max_features=1000, min_df=2, max_df=0.9)
 
-    tf = tf_vectorizer.fit_transform(dataset)
+    new_dataset = []
+    if len(stop_words_arrays):
+        for line in dataset:
+            # remove non letters
+            text = ''.join([c.lower() for c in line if c.lower() not in non_letters])
+            text = ' '.join([c.lower() for c in text.split(" ") if c.lower() not in stop_words_arrays])
+            # tokenize
+            tokens =  word_tokenize(text)
+            line = " ".join(tokens)
+            if stemming:
+                try:
+                    stems = stem_tokens(tokens, stemmer)
+                except Exception:
+                    stems = ['']
+                line = " ".join(stems)
+
+            new_dataset.append(line)
+    else:
+        new_dataset = dataset
+
+    tf = tf_vectorizer.fit_transform(new_dataset)
     vocab = tf_vectorizer.get_feature_names()
 
     new_seeds = []

@@ -1,7 +1,8 @@
 Flask_Cors==3.0.7
 Flask==1.0.2
-python-dotenv==0.10.1
+python-dotenv==0.10.3
 git+git://github.com/Hernan4444/Seeded-and-interactive-lda@develop#egg=lda
-numpy==1.16.1
-scikit_learn==0.20.2
+numpy==1.16.4
+scikit_learn==0.21.2
+nltk==3.4.3
 

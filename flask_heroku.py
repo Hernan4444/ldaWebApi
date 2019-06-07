@@ -118,6 +118,13 @@ def test():
     topics = int(request.form.get('topics'))
     database = request.form.get('database')
 
+    stop_words_files = request.files.get('stopwords', None)
+    stop_words_array = []
+    if stop_words_files:
+        stop_words_array = [x.decode("utf-8").strip().lower() for x in stop_words_files]
+
+    steeming = request.form.get('steeming', "False") == "True"
+
     stop_words = False
     if database == "NewGroups.5":
         data = load_database(5)
@@ -130,12 +137,13 @@ def test():
             data = load_file(database, json.load(file))
 
     if mode == "LDA":
-        result = run_lda(data, iterations, alpha, beta, topics, stop_words)
+        result = run_lda(data, iterations, alpha, beta, topics,
+                         stop_words, stop_words_array, steeming)
     else:
         nu = float(request.form.get('nu', "0").replace(",", "."))
         seed = json.loads(request.form.get('seeds', "[]"))
         result = run_interactive_lda(data, iterations, alpha, beta, nu,
-                                     topics, seed, mode, stop_words)
+                                     topics, seed, mode, stop_words, stop_words_array, steeming)
 
     # return string_r
     response = Response(json.dumps(result),
