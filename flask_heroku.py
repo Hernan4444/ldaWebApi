@@ -20,6 +20,12 @@ app = Flask(__name__)
 CORS(app)
 
 
+@app.route("/page")
+def index():
+    with open("page/index.html", encoding="UTF-8") as file:
+        data = "".join(file.readlines())
+    return data
+
 @app.route("/")
 def index():
     with open("index.html", encoding="UTF-8") as file:
