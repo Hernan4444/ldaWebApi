@@ -21,7 +21,7 @@ CORS(app)
 
 
 @app.route("/page")
-def index():
+def index_page():
     with open("page/index.html", encoding="UTF-8") as file:
         data = "".join(file.readlines())
     return data
