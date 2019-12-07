@@ -131,15 +131,15 @@ def get_bigrams_pmi(documents_1, documents_2, stem, n_words=20):
 
     def get_bigrams(documents, sep="-"):
         bigrams = [
-            list(map(lambda x: f"{x[0]}{sep}{x[1]}", ngrams(doc, 2))) for doc in documents]
+            list(map(lambda x: "{}{}{}".format(x[0], sep, x[1]), ngrams(doc, 2))) for doc in documents]
         return bigrams
 
     def bigram_to_str(bigram, dictionary, sep="-"):
         stems = bigram.split(sep)
         if stem:
-            return f"{dictionary[stems[0]]}-{dictionary[stems[1]]}"
+            return "{}-{}".format(dictionary[stems[0]], dictionary[stems[1]])
         else:
-            return f"{stems[0]}-{stems[1]}"
+            return "{}-{}".format(stems[0], stems[1])
 
     processed_1, stem_dict_1 = preprocess(documents_1, stem)
     processed_2, stem_dict_2 = preprocess(documents_2, stem)
