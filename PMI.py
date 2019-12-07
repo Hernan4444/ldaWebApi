@@ -16,7 +16,7 @@ from nltk.stem import WordNetLemmatizer
 from gensim.parsing.preprocessing import strip_punctuation
 from gensim.corpora import Dictionary
 
-
+nltk.download('stopwords')
 nltk.download('wordnet')  # download wordnet to be used in lemmatization
 
 sw = stopwords.words("spanish")
