@@ -2,14 +2,20 @@ from openpyxl import load_workbook
 from os.path import join, exists
 from os import remove
 from constant import ALLOWED_EXTENSIONS
+import pandas as pd
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.stem import SnowballStemmer
+from string import punctuation, ascii_uppercase
+import random
+from collections import defaultdict
 
+nltk.download('punkt')
+NON_LETTERS = list(punctuation)
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-
-def is_xlsx(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() == "xlsx"
+# we add spanish punctuation
+NON_LETTERS.extend(['¿', '¡', '-'])
+NON_LETTERS.extend(map(str, range(10)))
 
 
 HEADERS = [
@@ -22,6 +28,54 @@ HEADERS = [
     'NOMBRE_DEL_DOCENTE'
 ]
 
+# based on http://www.cs.duke.edu/courses/spring14/compsci290/assignments/lab02.html
+STEMMER = SnowballStemmer('spanish')
+
+
+def remove_stopword(text, stopwords):
+    # remove non letters
+    text = ''.join([c.lower() for c in text if c.lower() not in NON_LETTERS])
+
+    # remove stopword
+    text = ' '.join([c.lower() for c in text.split(" ") if c.lower() not in stopwords])
+
+    # tokenize
+    tokens = word_tokenize(text)
+    if len(tokens):
+        return " ".join(tokens)
+    return " "
+
+
+def stemming_text(text):
+    new_words = []
+    tokens = word_tokenize(text)
+    for word in tokens:
+        new_words.append(STEMMER.stem(word))
+    if len(new_words):
+        return " ".join(new_words)
+    return " "
+
+
+def generate_new_text(df):
+    stopwords = []
+    with open("stopwords_spanish.txt", encoding="UTF-8") as file:
+        for line in file:
+            stopwords.append(line.strip())
+
+    df['TEXTO_STOPWORD'] = df.TEXTO.map(lambda text: remove_stopword(text, stopwords))
+    df['TEXTO_STEMMING'] = df.TEXTO.map(lambda text: stemming_text(text))
+    df['TEXTO_STOPWORD_STEMMING'] = df.TEXTO_STOPWORD.map(lambda text: stemming_text(text))
+    return df
+
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def is_xlsx(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() == "xlsx"
+
+
 def parse_question(sheet, question, headers_position, data):
     headers = HEADERS.copy()
     headers.append("PREGUNTA_{}".format(question))
@@ -33,9 +87,10 @@ def parse_question(sheet, question, headers_position, data):
         for column in headers:
             line.append(sheet.cell(row=i, column=headers_position[column]).value)
 
-        line.append(18)
+        line.append(question)
         data.append([str(x).replace("\n", " ").replace("\r", "").replace("\t", " ") for x in line])
     return data
+
 
 def check(headers):
     for elem in HEADERS:
@@ -43,58 +98,80 @@ def check(headers):
             return False
     return True
 
-def process_encuestas(filename):
+
+def index_file(df):
+    indexs = defaultdict(list)
+    for index, text in enumerate(df.TEXTO_STEMMING.values):
+        # remove non letters
+        text = ''.join([c.lower() for c in text if c.lower() not in NON_LETTERS])
+
+        # tokenize
+        tokens = word_tokenize(text)
+        for word in tokens:
+            indexs[word].append(index)
+    return indexs
+
+def process_encuestas(filename, exist, exist_filename):
     filepath = join("data", filename)
-    wb = load_workbook(filepath)
+    workbook = load_workbook(filepath)
+
     data = []
-    try: 
-        sheet = wb['Pregunta 18']
+    try:
+        sheet = workbook['Pregunta 18']
     except:
-        sheet = wb['PREGUNTA 18']
+        sheet = workbook['PREGUNTA 18']
 
     headers = {}
     for j in range(1, sheet.max_column + 1):
-        header = sheet.cell(row=1, column=j).value.replace("\n", " ").replace("\r", "").replace("\t", " ")
+        header = sheet.cell(row=1, column=j).value.replace(
+            "\n", " ").replace("\r", "").replace("\t", " ")
         headers[header] = j
-    print(headers)
+
     if not check(headers):
         remove(filepath)
-        return "ERROR", False
+        return None
 
     data = parse_question(sheet, 18, headers, data)
-    
-    try: 
-        sheet = wb['Pregunta 17']
-    except:
-        sheet = wb['PREGUNTA 17']
 
+    try:
+        sheet = workbook['Pregunta 17']
+    except:
+        sheet = workbook['PREGUNTA 17']
 
     headers = {}
     for j in range(1, sheet.max_column + 1):
-        header = sheet.cell(row=1, column=j).value.replace("\n", " ").replace("\r", "").replace("\t", " ")
+        header = sheet.cell(row=1, column=j).value.replace(
+            "\n", " ").replace("\r", "").replace("\t", " ")
         headers[header] = j
 
     if not check(headers):
         remove(filepath)
-        return "ERROR", False
+        return None
 
     data = parse_question(sheet, 17, headers, data)
 
     final_header = HEADERS.copy()
     final_header.append("TEXTO")
     final_header.append("PREGUNTA")
-
-    exist = exists(join("data", "EncuestasDocentes.tsv"))
-    if exist:
-        with open(join("data", "EncuestasDocentes.tsv"), "a", encoding="UTF-8") as file:
-            for line in data:
-                file.write("\t".join(line) + "\n")
-
-    else:
-        with open(join("data", "EncuestasDocentes.tsv"), "w", encoding="UTF-8") as file:
-            file.write("\t".join(final_header) + "\n")
-            for line in data:
-                file.write("\t".join(line) + "\n")
+    df = pd.DataFrame(data, columns=final_header)
+    df['SEMESTRE'] = df.PERIODO_APLICACION.map(lambda x: 1 if x == 20 else 2)
+    del df['PERIODO_APLICACION']
+    df = generate_new_text(df)
+    indexs = index_file(df)
 
     remove(filepath)
-    return "EncuestasDocentes.tsv", exist
+    if exist:
+        last_dataset = pd.read_csv(join('data', exist_filename), sep="\t", index_col=0)
+        df = pd.concat([df, last_dataset])
+
+    return df, indexs
+
+def process_other_text(filename):
+    filepath = join("data", filename)
+    with open(filepath, encoding="UTF-8") as file:
+        texts = file.readlines()
+    df = pd.DataFrame([texts], columns="TEXTO")
+    df = generate_new_text(df)
+    indexs = index_file(df)
+    remove(filepath)
+    return df, indexs

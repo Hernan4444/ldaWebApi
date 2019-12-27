@@ -3,28 +3,43 @@ from flask import Flask, request, json, Response, render_template
 from json import loads as load_json
 import os
 import re
-from functions import load_database, run_lda, run_interactive_lda, load_file, \
-    search_by_words, search_by_word_and_topic, search_by_topic, search_by_multiples_words
+from functions import run_lda, load_file, search_by_words, save
 from constant import TOKEN
-from pathlib import Path  # python3 only
-# from dotenv import load_dotenv
+from pathlib import Path
 from flask_cors import CORS
-from utils import allowed_file, is_xlsx, process_encuestas
+from utils import allowed_file, is_xlsx, process_encuestas, process_other_text
 from PMI import get_words_pmi
-
-# env_path = Path('.') / '.env'
-# load_dotenv(dotenv_path=".env")
-
+import hashlib
+import binascii
+from functools import wraps
+import pandas as pd
 
 app = Flask(__name__)
 CORS(app)
 
 
-@app.route("/page")
-def index_page():
-    with open("page/index.html", encoding="UTF-8") as file:
-        data = "".join(file.readlines())
-    return data
+def encript_password(password):
+    HASH = hashlib.new('sha256')
+    HASH.update(password.encode())
+    halt = HASH.digest()
+    hash_ = hashlib.pbkdf2_hmac('sha256', halt, b'salt', 1000)
+    password_encripty = binascii.hexlify(hash_).decode()
+    return password_encripty
+
+
+def check_token(f):
+    @wraps(f)
+    def check(*args, **kwargs):
+        token = encript_password(request.form.get('token', ''))
+        if token != encript_password(TOKEN):
+            response = Response(json.dumps({'error': 'No tienes autorización'}),
+                                status=401,
+                                mimetype='application/json'
+                                )
+            return response
+        return f(*args, **kwargs)
+    return check
+
 
 @app.route("/")
 def index():
@@ -39,15 +54,15 @@ def pin():
 
 
 @app.route("/database", methods=["POST", "GET"])
+@check_token
 def database():
-    files = []
+    password = encript_password(request.form.get('password', ''))
+    email = request.form.get('email', ' ')
+    databases = pd.read_csv('database.tsv',  encoding="UTF-8", sep="\t")
+    possibles_databases = databases[(databases.password == password) & (databases.email == email)]
+    possibles_databases = possibles_databases[['file_name_client', 'database_name_client']]
 
-    with open("database.json", encoding="UTF-8") as file:
-        data = json.load(file)
-
-    files.extend(data["files"])
-
-    response = Response(json.dumps(files),
+    response = Response(json.dumps(possibles_databases.to_dict(orient='records')),
                         status=200,
                         mimetype='application/json'
                         )
@@ -55,61 +70,37 @@ def database():
 
 
 @app.route("/uploadFile", methods=["POST", "GET"])
+@check_token
 def file_upload():
-    token = request.form.get('token')
-    if token != TOKEN:
-
-        response = Response(json.dumps({'error': 'No tienes autorización'}),
-                            status=401,
-                            mimetype='application/json'
-                            )
-        return response
-
     file = request.files['file']
     filename = request.form.get('name')
+    email = request.form.get('email', ' ')
+    password = encript_password(request.form.get('password', ''))
+
     if file and filename != "" and is_xlsx(filename):
+        all_databases = pd.read_csv('database.tsv', encoding="UTF-8", sep="\t")
         file.save(os.path.join("data", filename))
+        possible_encuesta_data = all_databases[all_databases.database_name_client ==
+                                               'EncuestasDocentes']
+        if (possible_encuesta_data.shape[0] == 1):
+            exist = True
+            exist_filename = possible_encuesta_data.iloc[0].file_name_backend
+        else:
+            exist = False
+            exist_filename = ''
 
-        title, exist = process_encuestas(filename)
-
-        if not exist and title != "ERROR":
-
-            with open("database.json", encoding="UTF-8") as file:
-                data = json.load(file)
-
-            if len(data["files"]) == 0:
-                index = 0
-            else:
-                index = int(data["files"][-1][0].split("-")[1]) + 1
-            data["files"].append(["file-{}".format(index), title.rsplit('.', 1)[0], title])
-
-            with open("database.json", encoding="UTF-8", mode="w") as file:
-                json.dump(data, file, indent=2)
+        df_encuestas, indexs = process_encuestas(
+            filename, exist=exist, exist_filename=exist_filename)
+        save(df_encuestas, 'EncuestasDocentes', email, password, exist, exist_filename, indexs)
 
     elif file and filename != "" and filename not in os.listdir("data") and allowed_file(filename):
+        # Otros archivos no XLS
         file.save(os.path.join("data", filename))
+        df_other_text, indexs = process_other_text(filename)
+        filename = ".".join(filename.split(".")[:-1])
+        save(df_other_text, filename, email, password, False, '', indexs)
 
-        with open("database.json", encoding="UTF-8") as file:
-            data = json.load(file)
-
-        if len(data["files"]) == 0:
-            index = 0
-        else:
-            index = int(data["files"][-1][0].split("-")[1]) + 1
-
-        data["files"].append(["file-{}".format(index), filename.rsplit('.', 1)[0], filename])
-
-        with open("database.json", encoding="UTF-8", mode="w") as file:
-            json.dump(data, file, indent=2)
-
-    files = []
-
-    with open("database.json", encoding="UTF-8") as file:
-        data = json.load(file)
-
-    files.extend(data["files"])
-
-    response = Response(json.dumps(files),
+    response = Response(json.dumps([]),
                         status=200,
                         mimetype='application/json'
                         )
@@ -117,53 +108,48 @@ def file_upload():
 
 
 @app.route("/searchDocumentMultiplesWords", methods=["POST", "GET"])
+@check_token
 def search_document_multiples_words():
-    token = request.form.get('token')
-    if token != TOKEN:
-
-        response = Response(json.dumps({'error': 'No tienes autorización'}),
-                            status=401,
-                            mimetype='application/json'
-                            )
-        return response
-
     words = request.form.get('words', "")
     words = re.compile(' +(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)').split(words)
     words = [x.strip("'").strip('"') for x in words]
+    words = [x for x in words if x != ""]
     documents = json.loads(request.form.get('documents', "[]"))
+    database = request.form.get('database')
+    data, _, indexs = load_file(database)
+
+    news_documents = []
+    for client_document, server_document in zip(documents, data.to_dict(orient='records')):
+        client_document['text'] = server_document['TEXTO']
+        news_documents.append(client_document)
+
+    df = pd.DataFrame(news_documents)
+
     good_words = [x.lower() for x in json.loads(request.form.get('goodWords', '[]'))]
     bad_words = [x.lower() for x in json.loads(request.form.get('badWords', '[]'))]
     teacher = request.form.get('teacher', '')
     sigle = request.form.get('sigle', '')
 
-
-    new_documents = search_by_multiples_words(words, documents, good_words, bad_words, teacher, sigle)
+    new_documents = search_by_words(words, df, good_words, bad_words, teacher, sigle, indexs)
 
     response = Response(json.dumps(new_documents),
                         status=200,
                         mimetype='application/json'
                         )
-                        
+
     return response
 
 
 @app.route("/generateWordCloud", methods=["POST", "GET"])
+@check_token
 def generate_wordcloud():
-    token = request.form.get('token')
-    if token != TOKEN:
-
-        response = Response(json.dumps({'error': 'No tienes autorización'}),
-                            status=401,
-                            mimetype='application/json'
-                            )
-        return response
-
     documents = json.loads(request.form.get('documents', "[]"))
 
     p17 = []
     p18 = []
     for doc in documents:
         doc_text = " ".join([x["text"] for x in doc['text']])
+
         if doc['metadata']['pregunta'] == 17:
             p17.append(doc_text)
         else:
@@ -171,13 +157,13 @@ def generate_wordcloud():
 
     p17, p18 = get_words_pmi(p17, p18, True, n_words=40)
     result = {
-        "17":{
-        "text":[],
-        "score":[]
+        "17": {
+            "text": [],
+            "score": []
         },
-        "18":{
-        "text":[],
-        "score":[]
+        "18": {
+            "text": [],
+            "score": []
         },
 
     }
@@ -195,90 +181,31 @@ def generate_wordcloud():
                         status=200,
                         mimetype='application/json'
                         )
-                        
-    return response
 
-@app.route("/searchDocument", methods=["POST", "GET"])
-def search_document():
-    token = request.form.get('token')
-    if token != TOKEN:
-
-        response = Response(json.dumps({'error': 'No tienes autorización'}),
-                            status=401,
-                            mimetype='application/json'
-                            )
-        return response
-
-    word = request.form.get('word', "")
-    topic = int(request.form.get('topic'))
-    mode = request.form.get('mode')
-    documents = json.loads(request.form.get('documents', "[]"))
-    good_words = json.loads(request.form.get('goodWords', '["domina", "interactiva"]'))
-    bad_words = json.loads(request.form.get('badWords', '["valoro", "disponibilidad"]'))
-
-    if mode == "word":
-        new_documents = search_by_words(word, topic, documents, good_words, bad_words)
-    elif mode == "topic":
-        new_documents = search_by_topic(topic, documents, good_words, bad_words)
-    else:
-        new_documents = search_by_word_and_topic(word, topic, documents, good_words, bad_words)
-
-    response = Response(json.dumps(new_documents),
-                        status=200,
-                        mimetype='application/json'
-                        )
-                        
     return response
 
 
 @app.route("/lda", methods=["POST", "GET"])
-def test():
-    token = request.form.get('token')
-    if token != TOKEN:
-
-        response = Response(json.dumps({'error': 'No tienes autorización'}),
-                            status=401,
-                            mimetype='application/json'
-                            )
-        return response
+@check_token
+def apply_lda():
 
     iterations = int(request.form.get('iterations'))
-    mode = request.form.get('mode')
+    mode = request.form.get('mode', None)
     alpha = float(request.form.get('alpha', "0").replace(",", "."))
     beta = float(request.form.get('beta', "0").replace(",", "."))
     topics = int(request.form.get('topics'))
     database = request.form.get('database')
-    
-    stop_words_spanish = request.form.get('stopwords', "False") == "True"
-    stop_words_array = []
-    if stop_words_spanish:
-        with open("stopwords_spanish.txt", encoding="UTF-8") as file:
-            for line in file:
-                stop_words_array.append(line.strip())
+    nu = float(request.form.get('nu', "0").replace(",", "."))
+    seed = json.loads(request.form.get('seeds', "[]"))
 
+    stopwords_spanish = request.form.get('stopwords', "False") == "True"
     steeming = request.form.get('steeming', "False") == "True"
+    data, is_encuesta, _ = load_file(database)
 
-    english_stopwords = False
-    if database == "NewGroups.5":
-        data = load_database(5)
-        english_stopwords = True
-    elif database == "NewGroups.10":
-        data = load_database(10)
-        english_stopwords = True
-    else:
-        with open("database.json", encoding="UTF-8") as file:
-            data = load_file(database, json.load(file))
+    mode = mode if mode != "LDA" else None
+    result = run_lda(data, iterations, alpha, beta, topics, is_encuesta,
+                     stopwords_spanish, steeming, nu, seed, mode)
 
-    if mode == "LDA":
-        result = run_lda(data, iterations, alpha, beta, topics,
-                         english_stopwords, stop_words_array, steeming)
-    else:
-        nu = float(request.form.get('nu', "0").replace(",", "."))
-        seed = json.loads(request.form.get('seeds', "[]"))
-        result = run_interactive_lda(data, iterations, alpha, beta, nu,
-                                     topics, seed, mode, english_stopwords, stop_words_array, steeming)
-
-    # return string_r
     response = Response(json.dumps(result),
                         status=200,
                         mimetype='application/json'

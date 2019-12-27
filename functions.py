@@ -7,170 +7,99 @@ import os
 import nltk
 from nltk.tokenize import word_tokenize
 from nltk.stem import SnowballStemmer
-from string import punctuation
 import pandas as pd
+import json
+from string import punctuation, ascii_uppercase
+from collections import defaultdict
 
 
-nltk.download('punkt')
-non_letters = list(punctuation)
+STEMMER = SnowballStemmer('spanish')
+NON_LETTERS = list(punctuation)
 
 # we add spanish punctuation
-non_letters.extend(['¿', '¡', '-'])
-non_letters.extend(map(str, range(10)))
+NON_LETTERS.extend(['¿', '¡', '-'])
+NON_LETTERS.extend(map(str, range(10)))
 
 
-# based on http://www.cs.duke.edu/courses/spring14/compsci290/assignments/lab02.html
-stemmer = SnowballStemmer('spanish')
+def filter_df(df, words, indexs):
+    if len(words) == 0:
+        return df
+    indexs_doc = None
+    for word in words:
+        stemmer_word = STEMMER.stem(word)
+
+        if stemmer_word != "" and stemmer_word in indexs:
+            if indexs_doc is None:
+                indexs_doc = set(indexs[stemmer_word])
+            else:
+                indexs_doc = indexs_doc.intersection(set(indexs[stemmer_word]))
+        else:
+            indexs_doc = set()
+
+    if indexs_doc is None:
+        indexs_doc = []
+    return df.iloc[list(indexs_doc)]
 
 
-def stem_tokens(tokens, stemmer):
-    stemmed = []
-    for item in tokens:
-        stemmed.append(stemmer.stem(item))
-    return stemmed
+def generate_secret_code(number):
+    first_number, second_number = random.randint(10, 99), random.randint(10, 99)
+    id_ = number + first_number + second_number
+    first_letters = "".join(random.sample(ascii_uppercase, 2))
+    second_letters = "".join(random.sample(ascii_uppercase, 2))
+    code = "{}{}{}{}{}".format(first_number, first_letters, id_, second_letters, second_number)
+    return code
 
 
-def load_file(filename, json_data):
-    for files in json_data["files"]:
-        if files[0] == filename:
-            return pd.read_csv(os.path.join("data", files[2]), encoding="UTF-8", sep="\t").fillna('')
+def save(df, filename, email, password, exist, exist_filename, indexs):
+    if df is None:
+        return
 
-
-def load_database(option=None):
-
-    if option == 5:
-        categ = ['alt.atheism', 'comp.graphics', 'rec.autos', 'rec.sport.hockey', 'sci.med']
-    elif option == 10:
-        categ = ['alt.atheism', 'comp.graphics', 'comp.windows.x', 'misc.forsale', 'rec.autos',
-                 'rec.sport.hockey', 'sci.crypt', 'sci.space', 'soc.religion.christian', 'talk.politics.guns', ]
+    if exist:
+        new_filename = exist_filename
+        indexs_filename = exist_filename + ".idx"
     else:
-        categ = None
+        all_databases = pd.read_csv('database.tsv', encoding="UTF-8", sep="\t")
+        index = all_databases.shape[0]  # numbers of rows
+        code = generate_secret_code(index)
+        new_filename = 'file_{}'.format(index)
+        indexs_filename = 'file_{}.idx'.format(index)
 
-    return fetch_20newsgroups(data_home="data/", subset='train', remove=(
-        'headers', 'footers', 'quotes'), categories=categ).data
+    df.to_csv(os.path.join("data", new_filename), sep="\t")
+    with open(os.path.join("data", indexs_filename), "w", encoding="UTF-8") as file:
+        json.dump(indexs, file)
 
-
-def run_lda(dataset, iterations, alpha, eta, topics, english_stopwords, stop_words_arrays, stemming):
-
-    new_dataset = []
-    if len(stop_words_arrays):
-        for line in dataset["TEXTO"].values:
-            # remove non letters
-            text = ''.join([c.lower() for c in line if c.lower() not in non_letters])
-            text = ' '.join([c.lower() for c in text.split(
-                " ") if c.lower() not in stop_words_arrays])
-            # tokenize
-            tokens = word_tokenize(text)
-            line = " ".join(tokens)
-            if stemming:
-                try:
-                    stems = stem_tokens(tokens, stemmer)
-                except Exception:
-                    stems = ['']
-                line = " ".join(stems)
-
-            new_dataset.append(line)
-    else:
-        new_dataset = dataset["TEXTO"].values
-
-    if english_stopwords:
-        tf_vectorizer = CountVectorizer(
-            stopwords='english', max_features=1000, min_df=0, max_df=0.9)
-    else:
-        tf_vectorizer = CountVectorizer(max_features=1000, min_df=0, max_df=0.9)
-
-    tf = tf_vectorizer.fit_transform(new_dataset)
-
-    model = lda.LDA(n_topics=topics, n_iter=iterations, alpha=alpha, eta=eta, refresh=50)
-    model.fit(tf)
-
-    word_topics = []
-    for topic_dist in model.topic_word_:
-        word_topics.append(list(zip(
-            ["{:0.3f}".format(x) for x in np.array(topic_dist)[np.argsort(topic_dist)][:-20:-1]],
-            np.array(tf_vectorizer.get_feature_names())[np.argsort(topic_dist)][:-20:-1]
-        )))
-
-    doc_topic = []
-    teachers_options = set()
-    sigles_options = set()
-    for doc_dist, (_, doc) in zip(model.doc_topic_, dataset.iterrows()):
-        data = {
-            'dist': ["{:0.3f}".format(x) for x in doc_dist],
-            'text': process_text(doc["TEXTO"]),
-            'metadata': {
-                'profesor': doc["NOMBRE_DEL_DOCENTE"],
-                'año': doc["ANO_APLICACION"],
-                'semestre': "S/I",
-                'sigla': doc["SIGLA"],
-                'pregunta': doc["PREGUNTA"],
-            }
-        }
-        doc_topic.append(data)
-        teachers_options.add(doc["NOMBRE_DEL_DOCENTE"])
-        sigles_options.add(doc["SIGLA"])
-
-    return {"word_topic": word_topics, "doc_topic": doc_topic, "filter": {
-        'teacher': list(teachers_options),
-        'sigle': list(sigles_options)
-    }}
+    if not exist:
+        with open('database.tsv', "a") as file:
+            file.write("{}\t{}\t{}\t{}\t{}\n".format(code, filename, new_filename, password, email))
 
 
-def process_text(doc):
-    data = []
-    new_doc = doc.replace("\n", " ")
-    for word in new_doc.split(" "):
-        data.append({"text": word, "class": 'black'})
+def load_file(filename):
+    df_dataset = pd.read_csv('database.tsv', encoding="UTF-8", sep="\t")
+    df_data = df_dataset[df_dataset.file_name_client == filename].iloc[0]
+    is_encuesta = df_data.database_name_client == "EncuestasDocentes"
+    df = pd.read_csv(os.path.join("data", df_data.file_name_backend),
+                     encoding="UTF-8", sep="\t", index_col=0)
+    with open(os.path.join("data", df_data.file_name_backend + ".idx"), encoding="UTF-8") as file:
+        idx = json.load(file)
 
-    return data
-
-
-def bad_and_good_word(doc, good_words, bad_words):
-    data = []
-    for word in doc:
-        class_ = 'black'
-        lower_word = word['text'].lower()
-        if lower_word in bad_words:
-            class_ = 'red'
-        elif lower_word in good_words:
-            class_ = 'green'
-
-        data.append({"text": word['text'], "class": class_})
-
-    return data
+    return df, is_encuesta, idx
 
 
-def run_interactive_lda(dataset, iterations, alpha, eta, nu, topics, seeds, mode, english_stopwords, stop_words_arrays, stemming):
+def run_lda(dataset, iterations, alpha, eta, topics, is_encuesta, stopword, stemming, nu=0.004, seeds=[], mode=None):
 
-    new_dataset = []
-    if len(stop_words_arrays):
-        for line in dataset["TEXTO"].values:
-            # remove non letters
-            text = ''.join([c.lower() for c in line if c.lower() not in non_letters])
-            text = ' '.join([c.lower() for c in text.split(
-                " ") if c.lower() not in stop_words_arrays])
-            # tokenize
-            tokens = word_tokenize(text)
-            line = " ".join(tokens)
-            if stemming:
-                try:
-                    stems = stem_tokens(tokens, stemmer)
-                except Exception:
-                    stems = ['']
-                line = " ".join(stems)
-
-            new_dataset.append(line)
+    if stopword and stemming:
+        new_dataset = dataset["TEXTO_STOPWORD_STEMMING"].values
+    elif stemming:
+        new_dataset = dataset["TEXTO_STEMMING"].values
+    elif stopword:
+        new_dataset = dataset["TEXTO_STOPWORD"].values
     else:
         new_dataset = dataset["TEXTO"].values
 
-    if english_stopwords:
-        tf_vectorizer = CountVectorizer(
-            stopwords='english', max_features=1000, min_df=0, max_df=0.9)
-    else:
-        tf_vectorizer = CountVectorizer(max_features=1000, min_df=0, max_df=0.9)
-
-    tf = tf_vectorizer.fit_transform(new_dataset)
     new_seeds = []
+
+    tf_vectorizer = CountVectorizer(max_features=1000, min_df=0, max_df=0.9)
+    tf = tf_vectorizer.fit_transform(new_dataset)
     vocab = tf_vectorizer.get_feature_names()
 
     for constrain in seeds:
@@ -178,13 +107,11 @@ def run_interactive_lda(dataset, iterations, alpha, eta, nu, topics, seeds, mode
         for word in seeds[constrain]:
             if word in vocab:
                 new_topic.append(vocab.index(word))
-            # else:
-            #     print(word, constrain)
+
         new_seeds.append(new_topic)
 
     model = lda.LDA(n_topics=topics, n_iter=iterations, alpha=alpha,
-                    eta=eta, nu=nu, seed=new_seeds, refresh=100, mode=mode.lower())
-
+                    eta=eta, refresh=50, seed=new_seeds, mode=mode, nu=nu)
     model.fit(tf)
 
     word_topics = []
@@ -197,132 +124,100 @@ def run_interactive_lda(dataset, iterations, alpha, eta, nu, topics, seeds, mode
     doc_topic = []
     teachers_options = set()
     sigles_options = set()
-    for doc_dist, (_, doc) in zip(model.doc_topic_, dataset.iterrows()):
+    for index, (doc_dist, (_, doc)) in enumerate(zip(model.doc_topic_, dataset.iterrows())):
         data = {
             'dist': ["{:0.3f}".format(x) for x in doc_dist],
             'text': process_text(doc["TEXTO"]),
+            'index': index,
             'metadata': {
                 'profesor': doc["NOMBRE_DEL_DOCENTE"],
                 'año': doc["ANO_APLICACION"],
-                'semestre': "S/I",
+                'semestre': doc["SEMESTRE"],
                 'sigla': doc["SIGLA"],
-                'pregunta': doc["PREGUNTA"],
+                'pregunta': doc["PREGUNTA"]
             }
         }
         doc_topic.append(data)
         teachers_options.add(doc["NOMBRE_DEL_DOCENTE"])
         sigles_options.add(doc["SIGLA"])
 
-    return {"word_topic": word_topics, "doc_topic": doc_topic, "filter": {
-        'teacher': list(teachers_options),
-        'sigle': list(sigles_options)
-    }}
+    return {
+        "word_topic": word_topics,
+        "doc_topic": doc_topic,
+        "filter": {
+            'teacher': list(teachers_options),
+            'sigle': list(sigles_options)
+        }
+    }
 
 
-    # if english_stopwords:
-    #     tf_vectorizer = CountVectorizer(
-    #         english_stopwords='english', max_features=1000, min_df=2, max_df=0.9)
-    # else:
-    #     tf_vectorizer = CountVectorizer(max_features=1000, min_df=2, max_df=0.9)
-
-    # new_dataset = []
-    # if len(stop_words_arrays):
-    #     for line in dataset:
-    #         # remove non letters
-    #         text = ''.join([c.lower() for c in line if c.lower() not in non_letters])
-    #         text = ' '.join([c.lower() for c in text.split(
-    #             " ") if c.lower() not in stop_words_arrays])
-    #         # tokenize
-    #         tokens = word_tokenize(text)
-    #         line = " ".join(tokens)
-    #         if stemming:
-    #             try:
-    #                 stems = stem_tokens(tokens, stemmer)
-    #             except Exception:
-    #                 stems = ['']
-    #             line = " ".join(stems)
-
-    #         new_dataset.append(line)
-    # else:
-    #     new_dataset = dataset
-
-    # tf = tf_vectorizer.fit_transform(new_dataset)
-    # vocab = tf_vectorizer.get_feature_names()
-
-    # new_seeds = []
-    # # print(seeds)
-
-    # for constrain in seeds:
-    #     new_topic = []
-    #     for word in seeds[constrain]:
-    #         if word in vocab:
-    #             new_topic.append(vocab.index(word))
-    #         # else:
-    #         #     print(word, constrain)
-    #     new_seeds.append(new_topic)
-    # # print(new_seeds)
-
-    # model = lda.LDA(n_topics=topics, n_iter=iterations, alpha=alpha,
-    #                 eta=eta, nu=nu, seed=new_seeds, refresh=100, mode=mode.lower())
-
-    # model.fit(tf)
-
-    # word_topics = []
-    # for topic_dist in model.topic_word_:
-    #     word_topics.append(list(zip(
-    #         ["{:0.3f}".format(x) for x in np.array(topic_dist)[np.argsort(topic_dist)][:-20:-1]],
-    #         np.array(tf_vectorizer.get_feature_names())[np.argsort(topic_dist)][:-20:-1]
-    #     )))
-
-    # doc_topic = []
-    # for doc_dist, doc in zip(model.doc_topic_, dataset):
-    #     doc_topic.append(["{:0.3f}".format(x) for x in doc_dist] + [doc.replace("\n", " ")])
-
-    # return {"word_topic": word_topics, "doc_topic": doc_topic}
-
-
-def join_text(array):
-    return " ".join([x["text"] for x in array])
-
-
-def search_by_words(word, topic, documents, good_words, bad_words):
-    data = [x for x in documents if word in join_text(x['text'])]
-    for i in range(len(data)):
-        data[i]["text"] = bad_and_good_word(data[i]["text"], good_words, bad_words)
-    return sorted(data, key=lambda x: x['dist'][topic], reverse=True)
-
-
-def search_by_word_and_topic(word, topic, documents, good_words, bad_words):
-    data = [x for x in documents if word in join_text(
-        x['text']) and x['dist'][topic] == max(x['dist'])]
-    for i in range(len(data)):
-        data[i]["text"] = bad_and_good_word(data[i]["text"], good_words, bad_words)
-    return sorted(data, key=lambda x: x['dist'][topic], reverse=True)
-
-
-def search_by_topic(topic, documents, good_words, bad_words):
-    data = [x for x in documents if x['dist'][topic] == max(x['dist'])]
-    for i in range(len(data)):
-        data[i]["text"] = bad_and_good_word(data[i]["text"], good_words, bad_words)
-    return sorted(data, key=lambda x: x['dist'][topic], reverse=True)
-
-
-def search_by_multiples_words(words, documents, good_words, bad_words, teacher, sigle):
+def process_text(doc):
     data = []
-    for doc in documents:
-        doc_text = join_text(doc['text'])
+    new_doc = doc.replace("\n", " ")
+    for word in new_doc.split(" "):
+        data.append({"text": word, "class": 'black'})
+    return data
+
+
+def bad_and_good_word(index, text, mark_words_index, word_types):
+    data = []
+    if index not in mark_words_index:
+        for word in text.split(" "):
+            data.append({"text": word, "class": 'black'})
+        return data
+
+    for word in text.split(" "):
+        aux_word = ''.join([c.lower() for c in word if c.lower() not in NON_LETTERS])
+        class_ = 'black'
+        aux_word = STEMMER.stem(aux_word)
+        for marked_word in mark_words_index[index]:
+            if aux_word.startswith(marked_word):
+                class_ = 'red'
+                if word_types[marked_word] == 'good':
+                    class_ = 'green'
+                break
+        data.append({"text": word, "class": class_})
+
+    return data
+
+
+def get_index(good_words, bad_words, indexs, doc_index):
+    doc_indexs = defaultdict(set)
+    words_type = {}
+    for word in good_words:
+        if word in indexs:
+            for index in indexs[word]:
+                if index in doc_index:
+                    doc_indexs[index].add(word)
+            words_type[word] = "good"
+
+    for word in bad_words:
+        if word in indexs:
+            for index in indexs[word]:
+                if index in doc_index:
+                    doc_indexs[index].add(word)
+            words_type[word] = "bad"
+
+    return doc_indexs, words_type
+
+
+def search_by_words(words, df, good_words, bad_words, teacher, sigle, index):
+    data = []
+    documents = filter_df(df, words, index)
+    good_words = [STEMMER.stem(word).lower() for word in good_words]
+    bad_words = [STEMMER.stem(word).lower() for word in bad_words]
+    mark_words_index, word_types = get_index(good_words, bad_words, index, documents.index)
+
+    for index, doc in documents.iterrows():
+        doc = doc.to_dict()
+
         if teacher != '' and doc['metadata']['profesor'].lower() != teacher.lower():
             continue
 
         if sigle != '' and doc['metadata']['sigla'].lower() != sigle.lower():
             continue
 
-        is_here = True
-        for word in words:
-            if word not in doc_text:
-                is_here = False
-                break
-        if is_here:
-            doc["text"] = bad_and_good_word(doc["text"], good_words, bad_words)
-            data.append(doc)
+        doc["text"] = bad_and_good_word(index, doc["text"], mark_words_index, word_types)
+        data.append(doc)
+
     return data

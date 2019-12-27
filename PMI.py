@@ -33,12 +33,11 @@ def preprocess(texts, stem=True):
     # remove words that are only 1-2 character
     texts = [[token for token in line if len(token) > 2] for line in texts]
     # remove numbers
-    texts = [[token for token in line if not token.isnumeric()]
-             for line in texts]
+    texts = [[token for token in line if not token.isnumeric()] for line in texts]
 
     # stemming
     stem_dict = dict()
-    
+
     if stem:
         stemmed = [[stemmer.stem(word) for word in line] for line in texts]
 
@@ -79,8 +78,7 @@ class PMI:
         """
         p_word_given_ctx = self.contexts_counts[ctx].get(
             word, 0) / np.sum(list(self.contexts_counts[ctx].values()))
-        p_word = self.total_counts.get(
-            word, 0) / np.sum(list(self.total_counts.values()))
+        p_word = self.total_counts.get(word, 0) / np.sum(list(self.total_counts.values()))
         return max(np.log2(p_word_given_ctx / p_word), 0)
 
     def get_top_words(self, n, ctx, min_prop=0.005):
@@ -89,8 +87,8 @@ class PMI:
         ctx: index of ctx
         """
         total = np.sum(list(self.contexts_counts[ctx].values()))
-        proportions = np.array(
-            [self.contexts_counts[ctx][i]/total for i in self.contexts_counts[ctx].keys()])
+        proportions = np.array([self.contexts_counts[ctx][i] /
+                                total for i in self.contexts_counts[ctx].keys()])
 #        print(proportions.max(), proportions.min())
         ranking = np.array([[self.ppmi(i, ctx), i]
                             for i in self.contexts_counts[ctx].keys()])
@@ -161,20 +159,15 @@ def get_bigrams_pmi(documents_1, documents_2, stem, n_words=20):
 
 if __name__ == "__main__":
     import pandas as pd
-    p17 = pd.read_csv('data/P17.tsv', sep="\t",
-                      header=None)  # Comentarios positivos
-    p18 = pd.read_csv('data/P18.tsv', sep="\t",
-                      header=None)  # Comentarios por mejorar
+    p17 = pd.read_csv('data/P17.tsv', sep="\t", header=None)  # Comentarios positivos
+    p18 = pd.read_csv('data/P18.tsv', sep="\t", header=None)  # Comentarios por mejorar
+
     inquiries = p17.append(p18)
     inquiries = inquiries.loc[pd.notnull(inquiries[3])]
     inquiries = inquiries.reset_index(drop=True)
-    inquiries = inquiries.groupby([1])[3].apply(
-        lambda x: " ".join(x)).to_frame()
+    inquiries = inquiries.groupby([1])[3].apply(lambda x: " ".join(x)).to_frame()
     p17 = p17.groupby([1])[3].apply(lambda x: " ".join(x)).to_frame()
     p18 = p18.groupby([1])[3].apply(lambda x: " ".join(x)).to_frame()
-    # p17 = ["asdads sakdjad aslkdja sldkjasl d", "123 sakdjad aslkdja sldkjasl d", "asdads sakdjad aslkdja sldkjasl d"]
-    # p18 = ["12312 2131sad", "salkdja0921 assako", "slakdn23jq0912jios"]
-    # words_pmi = get_words_pmi(p17, p18, True, n_words=40)
-    # print(words_pmi)
+
     bigrams_pmi = get_bigrams_pmi(p17[3], p18[3], True, n_words=30)
     print(bigrams_pmi)
