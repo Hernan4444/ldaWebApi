@@ -80,8 +80,7 @@ def file_upload():
     if file and filename != "" and is_xlsx(filename):
         all_databases = pd.read_csv('database.tsv', encoding="UTF-8", sep="\t")
         file.save(os.path.join("data", filename))
-        possible_encuesta_data = all_databases[all_databases.database_name_client ==
-                                               'EncuestasDocentes']
+        possible_encuesta_data = all_databases[(all_databases.password == password) & (all_databases.database_name_client == 'EncuestasDocentes')]
         if (possible_encuesta_data.shape[0] == 1):
             exist = True
             exist_filename = possible_encuesta_data.iloc[0].file_name_backend
