@@ -1,12 +1,8 @@
 import os
 import re
-
 from collections import Counter
 from functools import reduce
-
-
 import numpy as np
-import nltk
 
 from nltk.util import ngrams
 from nltk.corpus import stopwords
@@ -15,9 +11,6 @@ from nltk.stem import WordNetLemmatizer
 
 from gensim.parsing.preprocessing import strip_punctuation
 from gensim.corpora import Dictionary
-
-nltk.download('stopwords')
-nltk.download('wordnet')  # download wordnet to be used in lemmatization
 
 sw = stopwords.words("spanish")
 stemmer = SpanishStemmer(ignore_stopwords=True)

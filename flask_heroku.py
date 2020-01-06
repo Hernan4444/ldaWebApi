@@ -2,29 +2,24 @@
 from flask import Flask, request, json, Response, render_template
 from json import loads as load_json
 import os
+from os.path import join
 import re
-from functions import run_lda, load_file, search_by_words, save
+from functions import run_lda, search_by_words
 from constant import TOKEN
 from pathlib import Path
 from flask_cors import CORS
-from utils import allowed_file, is_xlsx, process_encuestas, process_other_text
+from utils import allowed_file, is_xlsx, encript_password, generate_filename
+from preprocess_file import process_encuestas, process_other_text
 from PMI import get_words_pmi
 import hashlib
 import binascii
 from functools import wraps
 import pandas as pd
+from database import Database
 
 app = Flask(__name__)
 CORS(app)
-
-
-def encript_password(password):
-    HASH = hashlib.new('sha256')
-    HASH.update(password.encode())
-    halt = HASH.digest()
-    hash_ = hashlib.pbkdf2_hmac('sha256', halt, b'salt', 1000)
-    password_encripty = binascii.hexlify(hash_).decode()
-    return password_encripty
+DATABASE = Database()
 
 
 def check_token(f):
@@ -48,21 +43,32 @@ def index():
     return data
 
 
-@app.route("/pin", methods=["POST", "GET"])
-def pin():
-    return "pin"
-
-
 @app.route("/database", methods=["POST", "GET"])
 @check_token
 def database():
     password = encript_password(request.form.get('password', ''))
-    email = request.form.get('email', ' ')
-    databases = pd.read_csv('database.tsv',  encoding="UTF-8", sep="\t")
-    possibles_databases = databases[(databases.password == password) & (databases.email == email)]
-    possibles_databases = possibles_databases[['file_name_client', 'database_name_client']]
+    df = DATABASE.get_databases(password)
 
-    response = Response(json.dumps(possibles_databases.to_dict(orient='records')),
+    response = Response(json.dumps(df.to_dict(orient='records')),
+                        status=200,
+                        mimetype='application/json'
+                        )
+    return response
+
+
+@app.route("/delete", methods=["POST", "GET"])
+@check_token
+def delete():
+    name_client = request.form.get('name')
+    password = encript_password(request.form.get('password', ''))
+    text = "Base de datos no encontrada"
+    status = "error"
+
+    if DATABASE.remove(name_client, password):
+        text = "Base de datos eliminada con éxito"
+        status = "successfull"
+
+    response = Response(json.dumps({"status": status, "message": text}),
                         status=200,
                         mimetype='application/json'
                         )
@@ -73,33 +79,40 @@ def database():
 @check_token
 def file_upload():
     file = request.files['file']
-    filename = request.form.get('name')
-    email = request.form.get('email', ' ')
+    original_name = request.form.get('originalName')
+    name_client = request.form.get('name')
     password = encript_password(request.form.get('password', ''))
+    filename = generate_filename()
 
-    if file and filename != "" and is_xlsx(filename):
-        all_databases = pd.read_csv('database.tsv', encoding="UTF-8", sep="\t")
+    text = "Base de datos subida con éxito"
+    status = "successfull"
+    if is_xlsx(original_name):
+        filename += ".xlsx"
         file.save(os.path.join("data", filename))
-        possible_encuesta_data = all_databases[(all_databases.password == password) & (all_databases.database_name_client == 'EncuestasDocentes')]
-        if (possible_encuesta_data.shape[0] == 1):
-            exist = True
-            exist_filename = possible_encuesta_data.iloc[0].file_name_backend
+        df = DATABASE.found(name_client, password)
+
+        if df.shape[0] == 1:
+            exist_filename = df.iloc[0].file_name_backend
+            text = "Base de datos concatenada a la anterior con éxito"
         else:
-            exist = False
-            exist_filename = ''
+            exist_filename = ""
 
-        df_encuestas, indexs = process_encuestas(
-            filename, exist=exist, exist_filename=exist_filename)
-        save(df_encuestas, 'EncuestasDocentes', email, password, exist, exist_filename, indexs)
+        df_encuestas, indexs = process_encuestas(filename, exist_filename)
+        DATABASE.save(df_encuestas, name_client, password, exist_filename, indexs, True)
 
-    elif file and filename != "" and filename not in os.listdir("data") and allowed_file(filename):
+    elif allowed_file(original_name):
         # Otros archivos no XLS
-        file.save(os.path.join("data", filename))
-        df_other_text, indexs = process_other_text(filename)
-        filename = ".".join(filename.split(".")[:-1])
-        save(df_other_text, filename, email, password, False, '', indexs)
+        # (para txt) En caso de nombre ocupado: Responder que no es posible DESPUES
+        # (para txt) En caso de nombre no ocupado: Crear una nueva: Responder que se ha creado una nueva base de datos DESPUES
+        status = "error"
+        text = "No se soporta este formato"
 
-    response = Response(json.dumps([]),
+        # file.save(os.path.join("data", filename))
+        # df_other_text, indexs = process_other_text(filename)
+        # filename = ".".join(filename.split(".")[:-1])
+        # save(df_other_text, filename, email, password, False, '', indexs)
+
+    response = Response(json.dumps({"status": status, "message": text}),
                         status=200,
                         mimetype='application/json'
                         )
@@ -115,7 +128,7 @@ def search_document_multiples_words():
     words = [x for x in words if x != ""]
     documents = json.loads(request.form.get('documents', "[]"))
     database = request.form.get('database')
-    data, _, indexs = load_file(database)
+    data, indexs, _ = DATABASE.load_file(database)
 
     news_documents = []
     for client_document, server_document in zip(documents, data.to_dict(orient='records')):
@@ -143,12 +156,9 @@ def search_document_multiples_words():
 @check_token
 def generate_wordcloud():
     documents = json.loads(request.form.get('documents', "[]"))
-
-    p17 = []
-    p18 = []
+    p17, p18 = [], []
     for doc in documents:
         doc_text = " ".join([x["text"] for x in doc['text']])
-
         if doc['metadata']['pregunta'] == 17:
             p17.append(doc_text)
         else:
@@ -156,15 +166,8 @@ def generate_wordcloud():
 
     p17, p18 = get_words_pmi(p17, p18, True, n_words=40)
     result = {
-        "17": {
-            "text": [],
-            "score": []
-        },
-        "18": {
-            "text": [],
-            "score": []
-        },
-
+        "17": {"text": [], "score": []},
+        "18": {"text": [], "score": []},
     }
     for word, score in p17:
         result["17"]["text"].append(word)
@@ -199,7 +202,13 @@ def apply_lda():
 
     stopwords_spanish = request.form.get('stopwords', "False") == "True"
     steeming = request.form.get('steeming', "False") == "True"
-    data, is_encuesta, _ = load_file(database)
+    try:
+        data, _, is_encuesta = DATABASE.load_file(database)
+    except IndexError:
+        response = Response(json.dumps({"result": [], "status": "error", "message": "La base de datos no existe"}),
+                            status=200,
+                            mimetype='application/json'
+                            )
 
     mode = mode if mode != "LDA" else None
     result = run_lda(data, iterations, alpha, beta, topics, is_encuesta,

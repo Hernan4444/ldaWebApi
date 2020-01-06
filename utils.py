@@ -1,71 +1,23 @@
-from openpyxl import load_workbook
-from os.path import join, exists
-from os import remove
 from constant import ALLOWED_EXTENSIONS
-import pandas as pd
-import nltk
-from nltk.tokenize import word_tokenize
-from nltk.stem import SnowballStemmer
-from string import punctuation, ascii_uppercase
-import random
-from collections import defaultdict
-
-nltk.download('punkt')
-NON_LETTERS = list(punctuation)
-
-# we add spanish punctuation
-NON_LETTERS.extend(['¿', '¡', '-'])
-NON_LETTERS.extend(map(str, range(10)))
+from hashlib import new, pbkdf2_hmac
+from binascii import hexlify
+from database import Database
+from time import time
+from random import randint
 
 
-HEADERS = [
-    'ANO_APLICACION',
-    'PERIODO_APLICACION',
-    'NOMBRE_UA_CURSO',
-    'NOMBRE_ASIGNATURA',
-    'SIGLA',
-    'SECCION',
-    'NOMBRE_DEL_DOCENTE'
-]
-
-# based on http://www.cs.duke.edu/courses/spring14/compsci290/assignments/lab02.html
-STEMMER = SnowballStemmer('spanish')
+def encript_password(password):
+    HASH = new('sha256')
+    HASH.update(password.encode())
+    halt = HASH.digest()
+    hash_ = pbkdf2_hmac('sha256', halt, b'salt', 1000)
+    password_encripty = hexlify(hash_).decode()
+    return password_encripty
 
 
-def remove_stopword(text, stopwords):
-    # remove non letters
-    text = ''.join([c.lower() for c in text if c.lower() not in NON_LETTERS])
-
-    # remove stopword
-    text = ' '.join([c.lower() for c in text.split(" ") if c.lower() not in stopwords])
-
-    # tokenize
-    tokens = word_tokenize(text)
-    if len(tokens):
-        return " ".join(tokens)
-    return " "
-
-
-def stemming_text(text):
-    new_words = []
-    tokens = word_tokenize(text)
-    for word in tokens:
-        new_words.append(STEMMER.stem(word))
-    if len(new_words):
-        return " ".join(new_words)
-    return " "
-
-
-def generate_new_text(df):
-    stopwords = []
-    with open("stopwords_spanish.txt", encoding="UTF-8") as file:
-        for line in file:
-            stopwords.append(line.strip())
-
-    df['TEXTO_STOPWORD'] = df.TEXTO.map(lambda text: remove_stopword(text, stopwords))
-    df['TEXTO_STEMMING'] = df.TEXTO.map(lambda text: stemming_text(text))
-    df['TEXTO_STOPWORD_STEMMING'] = df.TEXTO_STOPWORD.map(lambda text: stemming_text(text))
-    return df
+def generate_filename():
+    random_string = str(Database.generate_secret_code(randint(10, 99)))
+    return str(time()).replace(".", "") + random_string
 
 
 def allowed_file(filename):
@@ -74,104 +26,3 @@ def allowed_file(filename):
 
 def is_xlsx(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() == "xlsx"
-
-
-def parse_question(sheet, question, headers_position, data):
-    headers = HEADERS.copy()
-    headers.append("PREGUNTA_{}".format(question))
-    max_row = sheet.max_row
-    for i in range(2, max_row + 1):
-        line = []
-        if sheet.cell(row=i, column=1).value is None:
-            continue
-        for column in headers:
-            line.append(sheet.cell(row=i, column=headers_position[column]).value)
-
-        line.append(question)
-        data.append([str(x).replace("\n", " ").replace("\r", "").replace("\t", " ") for x in line])
-    return data
-
-
-def check(headers):
-    for elem in HEADERS:
-        if elem not in headers:
-            return False
-    return True
-
-
-def index_file(df):
-    indexs = defaultdict(list)
-    for index, text in enumerate(df.TEXTO_STEMMING.values):
-        # remove non letters
-        text = ''.join([c.lower() for c in text if c.lower() not in NON_LETTERS])
-
-        # tokenize
-        tokens = word_tokenize(text)
-        for word in tokens:
-            indexs[word].append(index)
-    return indexs
-
-def process_encuestas(filename, exist, exist_filename):
-    filepath = join("data", filename)
-    workbook = load_workbook(filepath)
-
-    data = []
-    try:
-        sheet = workbook['Pregunta 18']
-    except:
-        sheet = workbook['PREGUNTA 18']
-
-    headers = {}
-    for j in range(1, sheet.max_column + 1):
-        header = sheet.cell(row=1, column=j).value.replace(
-            "\n", " ").replace("\r", "").replace("\t", " ")
-        headers[header] = j
-
-    if not check(headers):
-        remove(filepath)
-        return None
-
-    data = parse_question(sheet, 18, headers, data)
-
-    try:
-        sheet = workbook['Pregunta 17']
-    except:
-        sheet = workbook['PREGUNTA 17']
-
-    headers = {}
-    for j in range(1, sheet.max_column + 1):
-        header = sheet.cell(row=1, column=j).value.replace(
-            "\n", " ").replace("\r", "").replace("\t", " ")
-        headers[header] = j
-
-    if not check(headers):
-        remove(filepath)
-        return None
-
-    data = parse_question(sheet, 17, headers, data)
-
-    final_header = HEADERS.copy()
-    final_header.append("TEXTO")
-    final_header.append("PREGUNTA")
-    df = pd.DataFrame(data, columns=final_header)
-    df['SEMESTRE'] = df.PERIODO_APLICACION.map(lambda x: 1 if x == 20 else 2)
-    del df['PERIODO_APLICACION']
-    df = generate_new_text(df)
-    indexs = index_file(df)
-
-    remove(filepath)
-    if exist:
-        last_dataset = pd.read_csv(join('data', exist_filename), sep="\t", index_col=0)
-        df = pd.concat([df, last_dataset])
-
-    return df, indexs
-
-def process_other_text(filename):
-    filepath = join("data", filename)
-    with open(filepath, encoding="UTF-8") as file:
-        texts = file.readlines()
-    df = pd.DataFrame([texts], columns="TEXTO")
-    df = generate_new_text(df)
-    indexs = index_file(df)
-    remove(filepath)
-    return df, indexs

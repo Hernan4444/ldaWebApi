@@ -4,14 +4,13 @@ import random
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.datasets import fetch_20newsgroups
 import os
-import nltk
 from nltk.tokenize import word_tokenize
 from nltk.stem import SnowballStemmer
 import pandas as pd
 import json
 from string import punctuation, ascii_uppercase
 from collections import defaultdict
-
+import time
 
 STEMMER = SnowballStemmer('spanish')
 NON_LETTERS = list(punctuation)
@@ -39,50 +38,6 @@ def filter_df(df, words, indexs):
     if indexs_doc is None:
         indexs_doc = []
     return df.iloc[list(indexs_doc)]
-
-
-def generate_secret_code(number):
-    first_number, second_number = random.randint(10, 99), random.randint(10, 99)
-    id_ = number + first_number + second_number
-    first_letters = "".join(random.sample(ascii_uppercase, 2))
-    second_letters = "".join(random.sample(ascii_uppercase, 2))
-    code = "{}{}{}{}{}".format(first_number, first_letters, id_, second_letters, second_number)
-    return code
-
-
-def save(df, filename, email, password, exist, exist_filename, indexs):
-    if df is None:
-        return
-
-    if exist:
-        new_filename = exist_filename
-        indexs_filename = exist_filename + ".idx"
-    else:
-        all_databases = pd.read_csv('database.tsv', encoding="UTF-8", sep="\t")
-        index = all_databases.shape[0]  # numbers of rows
-        code = generate_secret_code(index)
-        new_filename = 'file_{}'.format(index)
-        indexs_filename = 'file_{}.idx'.format(index)
-
-    df.to_csv(os.path.join("data", new_filename), sep="\t")
-    with open(os.path.join("data", indexs_filename), "w", encoding="UTF-8") as file:
-        json.dump(indexs, file)
-
-    if not exist:
-        with open('database.tsv', "a") as file:
-            file.write("{}\t{}\t{}\t{}\t{}\n".format(code, filename, new_filename, password, email))
-
-
-def load_file(filename):
-    df_dataset = pd.read_csv('database.tsv', encoding="UTF-8", sep="\t")
-    df_data = df_dataset[df_dataset.file_name_client == filename].iloc[0]
-    is_encuesta = df_data.database_name_client == "EncuestasDocentes"
-    df = pd.read_csv(os.path.join("data", df_data.file_name_backend),
-                     encoding="UTF-8", sep="\t", index_col=0)
-    with open(os.path.join("data", df_data.file_name_backend + ".idx"), encoding="UTF-8") as file:
-        idx = json.load(file)
-
-    return df, is_encuesta, idx
 
 
 def run_lda(dataset, iterations, alpha, eta, topics, is_encuesta, stopword, stemming, nu=0.004, seeds=[], mode=None):
@@ -121,6 +76,7 @@ def run_lda(dataset, iterations, alpha, eta, topics, is_encuesta, stopword, stem
             np.array(tf_vectorizer.get_feature_names())[np.argsort(topic_dist)][:-20:-1]
         )))
 
+    ##TODO diferenciar entre encuesta y otro texto
     doc_topic = []
     teachers_options = set()
     sigles_options = set()
