@@ -209,6 +209,7 @@ def apply_lda():
                             status=200,
                             mimetype='application/json'
                             )
+        return response                  
 
     mode = mode if mode != "lda" else None
     result = run_lda(data, iterations, alpha, beta, topics, is_encuesta,

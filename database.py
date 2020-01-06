@@ -41,7 +41,7 @@ class Database:
             dump(indexs, file)
 
         if exist_filename == "":
-            with open('database.tsv', "a") as file:
+            with open('_database.tsv', "a") as file:
                 file.write("{}\t{}\t{}\t{}\t{}\n".format(
                     code, filename, new_filename, password, is_teacher_pool))
             self._load_database()
@@ -79,6 +79,6 @@ class Database:
         different_name_client = self.database.database_name_client != name_client
 
         new_data = self.database[different_password | different_name_client]
-        new_data.to_csv('database.tsv', sep="\t", index=False)
+        new_data.to_csv('_database.tsv', sep="\t", index=False)
         self._load_database()
         return True
