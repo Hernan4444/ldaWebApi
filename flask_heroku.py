@@ -210,7 +210,7 @@ def apply_lda():
                             mimetype='application/json'
                             )
 
-    mode = mode if mode != "LDA" else None
+    mode = mode if mode != "lda" else None
     result = run_lda(data, iterations, alpha, beta, topics, is_encuesta,
                      stopwords_spanish, steeming, nu, seed, mode)
 
