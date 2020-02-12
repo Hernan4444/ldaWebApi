@@ -20,10 +20,20 @@ NON_LETTERS.extend(['¿', '¡', '-'])
 NON_LETTERS.extend(map(str, range(10)))
 
 
-def filter_df(df, words, indexs):
-    if len(words) == 0:
+def filter_df(df, words, wordsOr, indexs):
+    if len(words) == 0 and len(wordsOr) == 0:
         return df
+
     indexs_doc = None
+    for word in wordsOr:
+        stemmer_word = STEMMER.stem(word)
+
+        if stemmer_word != "" and stemmer_word in indexs:
+            if indexs_doc is None:
+                indexs_doc = set(indexs[stemmer_word])
+            else:
+                indexs_doc = indexs_doc.union(set(indexs[stemmer_word]))
+
     for word in words:
         stemmer_word = STEMMER.stem(word)
 
@@ -76,10 +86,12 @@ def run_lda(dataset, iterations, alpha, eta, topics, is_encuesta, stopword, stem
             np.array(tf_vectorizer.get_feature_names())[np.argsort(topic_dist)][:-20:-1]
         )))
 
-    ##TODO diferenciar entre encuesta y otro texto
+    # TODO diferenciar entre encuesta y otro texto
     doc_topic = []
     teachers_options = set()
     sigles_options = set()
+    teachers_filter = defaultdict(lambda: set())
+    sigles_filter = defaultdict(lambda: set())
     for index, (doc_dist, (_, doc)) in enumerate(zip(model.doc_topic_, dataset.iterrows())):
         data = {
             'dist': ["{:0.3f}".format(x) for x in doc_dist],
@@ -93,6 +105,9 @@ def run_lda(dataset, iterations, alpha, eta, topics, is_encuesta, stopword, stem
                 'pregunta': doc["PREGUNTA"]
             }
         }
+        teachers_filter[doc["NOMBRE_DEL_DOCENTE"]].add(doc["SIGLA"])
+        sigles_filter[doc["SIGLA"]].add(doc["NOMBRE_DEL_DOCENTE"])
+
         doc_topic.append(data)
         teachers_options.add(doc["NOMBRE_DEL_DOCENTE"])
         sigles_options.add(doc["SIGLA"])
@@ -102,7 +117,9 @@ def run_lda(dataset, iterations, alpha, eta, topics, is_encuesta, stopword, stem
         "doc_topic": doc_topic,
         "filter": {
             'teacher': list(teachers_options),
-            'sigle': list(sigles_options)
+            'sigle': list(sigles_options),
+            "teacher_filter": {x: list(teachers_filter[x]) for x in teachers_filter},
+            "sigle_filter": {x: list(sigles_filter[x]) for x in sigles_filter}
         }
     }
 
@@ -157,13 +174,18 @@ def get_index(good_words, bad_words, indexs, doc_index):
     return doc_indexs, words_type
 
 
-def search_by_words(words, df, good_words, bad_words, teacher, sigle, index):
+def search_by_words(words, wordsOr, df, good_words, bad_words, teacher, sigle, indexs):
     data = []
-    documents = filter_df(df, words, index)
+    documents = filter_df(df, words, wordsOr, indexs)
     good_words = [STEMMER.stem(word).lower() for word in good_words]
     bad_words = [STEMMER.stem(word).lower() for word in bad_words]
-    mark_words_index, word_types = get_index(good_words, bad_words, index, documents.index)
+    mark_words_index, word_types = get_index(good_words, bad_words, indexs, documents.index)
 
+    teachers_filter = defaultdict(lambda: set())
+    sigles_filter = defaultdict(lambda: set())
+    
+    teachers = set()
+    sigles = set()
     for index, doc in documents.iterrows():
         doc = doc.to_dict()
 
@@ -176,4 +198,17 @@ def search_by_words(words, df, good_words, bad_words, teacher, sigle, index):
         doc["text"] = bad_and_good_word(index, doc["text"], mark_words_index, word_types)
         data.append(doc)
 
-    return data
+        teachers.add(doc['metadata']['profesor'])
+        sigles.add(doc['metadata']['sigla'])
+
+        teachers_filter[doc['metadata']['profesor']].add(doc['metadata']['sigla'])
+        sigles_filter[doc['metadata']['sigla']].add(doc['metadata']['profesor'])
+
+    return {
+        "data": data,
+        "teacher_filter": {x: list(teachers_filter[x]) for x in teachers_filter},
+        "sigle_filter": {x: list(sigles_filter[x]) for x in sigles_filter},
+        "teachers": list(teachers),
+        "sigles": list(sigles)
+
+    }

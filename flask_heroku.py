@@ -97,8 +97,17 @@ def file_upload():
         else:
             exist_filename = ""
 
-        df_encuestas, indexs = process_encuestas(filename, exist_filename)
-        DATABASE.save(df_encuestas, name_client, password, exist_filename, indexs, True)
+        try:
+            df_encuestas, indexs = process_encuestas(filename, exist_filename)
+            if df_encuestas is None:
+                status = "error"
+                text = "El archivo no posee algunas de las siguientes columnas: ANO_APLICACION, PERIODO_APLICACION, NOMBRE_UA_CURSO, NOMBRE_ASIGNATURA, SIGLA, SECCION, NOMBRE_DEL_DOCENTE"
+            else:
+                DATABASE.save(df_encuestas, name_client, password, exist_filename, indexs, True)
+                
+        except Exception as e:
+            status = "error"
+            text = "Error con el archivo: {}".format(e)
 
     elif allowed_file(original_name):
         # Otros archivos no XLS
@@ -126,6 +135,12 @@ def search_document_multiples_words():
     words = re.compile(' +(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)').split(words)
     words = [x.strip("'").strip('"') for x in words]
     words = [x for x in words if x != ""]
+    
+    wordsOr = request.form.get('wordsOr', "")
+    wordsOr = re.compile(' +(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)').split(wordsOr)
+    wordsOr = [x.strip("'").strip('"') for x in wordsOr]
+    wordsOr = [x for x in wordsOr if x != ""]
+
     documents = json.loads(request.form.get('documents', "[]"))
     database = request.form.get('database')
     data, indexs, _ = DATABASE.load_file(database)
@@ -142,7 +157,7 @@ def search_document_multiples_words():
     teacher = request.form.get('teacher', '')
     sigle = request.form.get('sigle', '')
 
-    new_documents = search_by_words(words, df, good_words, bad_words, teacher, sigle, indexs)
+    new_documents = search_by_words(words, wordsOr, df, good_words, bad_words, teacher, sigle, indexs)
 
     response = Response(json.dumps(new_documents),
                         status=200,
@@ -212,8 +227,15 @@ def apply_lda():
         return response                  
 
     mode = mode if mode != "lda" else None
-    result = run_lda(data, iterations, alpha, beta, topics, is_encuesta,
-                     stopwords_spanish, steeming, nu, seed, mode)
+    try:
+        result = run_lda(data, iterations, alpha, beta, topics, is_encuesta,
+                        stopwords_spanish, steeming, nu, seed, mode)
+    except:
+        response = Response(json.dumps({"result": [], "status": "error", "message": "Hubo un error con esta base de datos."}),
+                            status=200,
+                            mimetype='application/json'
+                            )
+        return response 
 
     response = Response(json.dumps(result),
                         status=200,

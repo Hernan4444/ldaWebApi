@@ -111,7 +111,7 @@ def process_encuestas(filename, exist_filename):
 
     if not check(headers):
         remove(filepath)
-        return None
+        return None, ""
 
     data = parse_question(sheet, 18, headers, data)
 
@@ -128,7 +128,7 @@ def process_encuestas(filename, exist_filename):
 
     if not check(headers):
         remove(filepath)
-        return None
+        return None, ""
 
     data = parse_question(sheet, 17, headers, data)
 

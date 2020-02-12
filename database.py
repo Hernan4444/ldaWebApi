@@ -42,7 +42,7 @@ class Database:
 
         if exist_filename == "":
             with open('_database.tsv', "a") as file:
-                file.write("{}\t{}\t{}\t{}\t{}\n".format(
+                file.write("\n{}\t{}\t{}\t{}\t{}".format(
                     code, filename, new_filename, password, is_teacher_pool))
             self._load_database()
 
