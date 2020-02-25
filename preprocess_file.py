@@ -66,7 +66,10 @@ def parse_question(sheet, question, headers_position, data):
         if sheet.cell(row=i, column=1).value is None:
             continue
         for column in headers:
-            line.append(sheet.cell(row=i, column=headers_position[column]).value)
+            value = sheet.cell(row=i, column=headers_position[column]).value
+            if str(value) == "None":
+                value = "Sin texto"
+            line.append(value)
 
         line.append(question)
         data.append([str(x).replace("\n", " ").replace("\r", "").replace("\t", " ") for x in line])
@@ -105,10 +108,10 @@ def process_encuestas(filename, exist_filename):
 
     headers = {}
     for j in range(1, sheet.max_column + 1):
-        header = sheet.cell(row=1, column=j).value.replace(
-            "\n", " ").replace("\r", "").replace("\t", " ")
+        header = sheet.cell(row=1, column=j).value.replace("\n", " ").replace("\r", "").replace("\t", " ")
         headers[header] = j
 
+    print(headers)
     if not check(headers):
         remove(filepath)
         return None, ""
