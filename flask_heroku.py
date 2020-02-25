@@ -235,7 +235,8 @@ def apply_lda():
     try:
         result = run_lda(data, iterations, alpha, beta, topics, is_encuesta,
                         stopwords_spanish, steeming, nu, seed, mode)
-    except:
+    except Exception as e:
+        print(e)
         response = Response(json.dumps({"result": [], "status": "error", "message": "Hubo un error con esta base de datos."}),
                             status=200,
                             mimetype='application/json'
