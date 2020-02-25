@@ -43,6 +43,11 @@ def index():
     return data
 
 
+@app.route("/pin", methods=["POST", "GET"])
+def pin():
+    return Response("PIN",status=200)
+
+
 @app.route("/database", methods=["POST", "GET"])
 @check_token
 def database():
