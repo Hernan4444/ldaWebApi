@@ -126,8 +126,6 @@ def run_lda(dataset, iterations, alpha, eta, topics, is_encuesta, stopword, stem
 
 def process_text(doc):
     data = []
-    if isinstance(doc, float):
-        print(doc, "##")
     new_doc = str(doc).replace("\n", " ")
     for word in new_doc.split(" "):
         data.append({"text": word, "class": 'black'})

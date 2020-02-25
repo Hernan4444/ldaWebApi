@@ -65,15 +65,18 @@ def parse_question(sheet, question, headers_position, data):
         line = []
         if sheet.cell(row=i, column=1).value is None:
             continue
+            
+        line_without_text = False
         for column in headers:
             value = sheet.cell(row=i, column=headers_position[column]).value
+            if str(value) == "None" and column == "PREGUNTA_{}".format(question):
+                line_without_text = True
+                break
 
-            if str(value) == "None":
-                value = "Sin texto"
             line.append(value)
-
-        line.append(question)
-        data.append([str(x).replace("\n", " ").replace("\r", "").replace("\t", " ") for x in line])
+        if not line_without_text:
+            line.append(question)
+            data.append([str(x).replace("\n", " ").replace("\r", "").replace("\t", " ") for x in line])
     return data
 
 
