@@ -52,6 +52,7 @@ class Database:
 
         df = read_csv(join("data", df_data.file_name_backend),
                       encoding="UTF-8", sep="\t", index_col=0)
+        df = df.fillna("Sin texto")
         with open(join("data", df_data.file_name_backend + ".idx"), encoding="UTF-8") as file:
             idx = load(file)
 
