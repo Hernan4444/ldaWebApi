@@ -67,6 +67,7 @@ def parse_question(sheet, question, headers_position, data):
             continue
         for column in headers:
             value = sheet.cell(row=i, column=headers_position[column]).value
+
             if str(value) == "None":
                 value = "Sin texto"
             line.append(value)
@@ -98,7 +99,7 @@ def index_file(df):
 
 def process_encuestas(filename, exist_filename):
     filepath = join("data", filename)
-    workbook = load_workbook(filepath)
+    workbook = load_workbook(filepath, data_only=True)
 
     data = []
     try:
@@ -111,7 +112,6 @@ def process_encuestas(filename, exist_filename):
         header = sheet.cell(row=1, column=j).value.replace("\n", " ").replace("\r", "").replace("\t", " ")
         headers[header] = j
 
-    print(headers)
     if not check(headers):
         remove(filepath)
         return None, ""
