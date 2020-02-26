@@ -36,7 +36,7 @@ class Database:
             new_filename = 'file_{}'.format(index)
             indexs_filename = 'file_{}.idx'.format(index)
 
-        df.fillna("Sin texto")
+        df.fillna("Nada")
         df.to_csv(join("data", new_filename), sep="\t")
         with open(join("data", indexs_filename), "w", encoding="UTF-8") as file:
             dump(indexs, file)
@@ -53,7 +53,8 @@ class Database:
 
         df = read_csv(join("data", df_data.file_name_backend),
                       encoding="UTF-8", sep="\t", index_col=0)
-        df = df.fillna("Sin texto")
+        df = df.fillna("Nada")
+
         with open(join("data", df_data.file_name_backend + ".idx"), encoding="UTF-8") as file:
             idx = load(file)
 
