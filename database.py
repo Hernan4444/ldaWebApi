@@ -36,7 +36,7 @@ class Database:
             new_filename = 'file_{}'.format(index)
             indexs_filename = 'file_{}.idx'.format(index)
 
-        df.fillna("Nada")
+        df = df.fillna("Nada")
         df.to_csv(join("data", new_filename), sep="\t")
         with open(join("data", indexs_filename), "w", encoding="UTF-8") as file:
             dump(indexs, file)
