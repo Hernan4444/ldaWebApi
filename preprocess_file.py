@@ -142,6 +142,7 @@ def process_encuestas(filename, exist_filename):
     final_header.append("TEXTO")
     final_header.append("PREGUNTA")
     df = pd.DataFrame(data, columns=final_header)
+    df = df[df.TEXTO.astype('str').str.len() > 2]
     df['SEMESTRE'] = df.PERIODO_APLICACION.map(lambda x: 1 if x == 20 else 2)
     del df['PERIODO_APLICACION']
     df = generate_new_text(df)
@@ -160,6 +161,7 @@ def process_other_text(filename):
     with open(filepath, encoding="UTF-8") as file:
         texts = file.readlines()
     df = pd.DataFrame([texts], columns="TEXTO")
+    df = df[df.TEXTO.astype('str').str.len() > 2]
     df = generate_new_text(df)
     indexs = index_file(df)
     remove(filepath)
