@@ -50,7 +50,7 @@ def filter_df(df, words, wordsOr, indexs):
     return df.iloc[list(indexs_doc)]
 
 
-def run_lda(dataset, iterations, alpha, eta, topics, is_encuesta, stopword, stemming, nu=0.004, seeds=[], mode=None):
+def run_lda(dataset, iterations, alpha, eta, topics, is_teacher_pool, stopword, stemming, nu=0.004, seeds=[], mode=None):
 
     if stopword and stemming:
         new_dataset = dataset["TEXTO_STOPWORD_STEMMING"].values
@@ -86,7 +86,23 @@ def run_lda(dataset, iterations, alpha, eta, topics, is_encuesta, stopword, stem
             np.array(tf_vectorizer.get_feature_names())[np.argsort(topic_dist)][:-20:-1]
         )))
 
-    # TODO diferenciar entre encuesta y otro texto
+    if not is_teacher_pool:
+        doc_topic = []
+
+        for index, (doc_dist, (_, doc)) in enumerate(zip(model.doc_topic_, dataset.iterrows())):
+            data = {
+                'dist': ["{:0.3f}".format(x) for x in doc_dist],
+                'text': process_text(doc["TEXTO"]),
+                'index': index,
+            }
+            doc_topic.append(data)
+        return {
+                "word_topic": word_topics,
+                "doc_topic": doc_topic,
+                "is_teacher_pool": is_teacher_pool,
+                "filter": {}
+            }
+
     doc_topic = []
     teachers_options = set()
     sigles_options = set()
@@ -115,6 +131,7 @@ def run_lda(dataset, iterations, alpha, eta, topics, is_encuesta, stopword, stem
     return {
         "word_topic": word_topics,
         "doc_topic": doc_topic,
+        "is_teacher_pool": is_teacher_pool,
         "filter": {
             'teacher': list(teachers_options),
             'sigle': list(sigles_options),
@@ -174,7 +191,7 @@ def get_index(good_words, bad_words, indexs, doc_index):
     return doc_indexs, words_type
 
 
-def search_by_words(words, wordsOr, df, good_words, bad_words, teacher, sigle, indexs):
+def search_by_words(words, wordsOr, df, good_words, bad_words, teacher, sigle, indexs, is_teacher_pool):
     data = []
     documents = filter_df(df, words, wordsOr, indexs)
     good_words = [STEMMER.stem(word).lower() for word in good_words]
@@ -186,29 +203,36 @@ def search_by_words(words, wordsOr, df, good_words, bad_words, teacher, sigle, i
     
     teachers = set()
     sigles = set()
-    for index, doc in documents.iterrows():
-        doc = doc.to_dict()
+    if is_teacher_pool:
+        for index, doc in documents.iterrows():
+            doc = doc.to_dict()
 
-        if teacher != '' and doc['metadata']['profesor'].lower() != teacher.lower():
-            continue
+            if teacher != '' and doc['metadata']['profesor'].lower() != teacher.lower():
+                continue
 
-        if sigle != '' and doc['metadata']['sigla'].lower() != sigle.lower():
-            continue
+            if sigle != '' and doc['metadata']['sigla'].lower() != sigle.lower():
+                continue
 
-        doc["text"] = bad_and_good_word(index, doc["text"], mark_words_index, word_types)
-        data.append(doc)
+            doc["text"] = bad_and_good_word(index, doc["text"], mark_words_index, word_types)
+            data.append(doc)
 
-        teachers.add(doc['metadata']['profesor'])
-        sigles.add(doc['metadata']['sigla'])
+            teachers.add(doc['metadata']['profesor'])
+            sigles.add(doc['metadata']['sigla'])
 
-        teachers_filter[doc['metadata']['profesor']].add(doc['metadata']['sigla'])
-        sigles_filter[doc['metadata']['sigla']].add(doc['metadata']['profesor'])
+            teachers_filter[doc['metadata']['profesor']].add(doc['metadata']['sigla'])
+            sigles_filter[doc['metadata']['sigla']].add(doc['metadata']['profesor'])
 
+    else:
+        for index, doc in documents.iterrows():
+            doc = doc.to_dict()
+
+            doc["text"] = bad_and_good_word(index, doc["text"], mark_words_index, word_types)
+            data.append(doc)
+            
     return {
         "data": data,
         "teacher_filter": {x: list(teachers_filter[x]) for x in teachers_filter},
         "sigle_filter": {x: list(sigles_filter[x]) for x in sigles_filter},
         "teachers": list(teachers),
         "sigles": list(sigles)
-
     }

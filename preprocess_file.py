@@ -146,23 +146,28 @@ def process_encuestas(filename, exist_filename):
     df['SEMESTRE'] = df.PERIODO_APLICACION.map(lambda x: 1 if x == 20 else 2)
     del df['PERIODO_APLICACION']
     df = generate_new_text(df)
-    indexs = index_file(df)
 
     remove(filepath)
     if exist_filename != "":
         last_dataset = pd.read_csv(join('data', exist_filename), sep="\t", index_col=0)
         df = pd.concat([df, last_dataset])
 
+    indexs = index_file(df)
     return df, indexs
 
 
-def process_other_text(filename):
+def process_other_text(filename, exist_filename):
     filepath = join("data", filename)
     with open(filepath, encoding="UTF-8") as file:
         texts = file.readlines()
-    df = pd.DataFrame([texts], columns="TEXTO")
+
+    df = pd.DataFrame(texts, columns=["TEXTO"])
     df = df[df.TEXTO.astype('str').str.len() > 2]
     df = generate_new_text(df)
-    indexs = index_file(df)
     remove(filepath)
+    if exist_filename != "":
+        last_dataset = pd.read_csv(join('data', exist_filename), sep="\t", index_col=0)
+        df = pd.concat([df, last_dataset])
+
+    indexs = index_file(df)
     return df, indexs

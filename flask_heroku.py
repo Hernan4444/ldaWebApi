@@ -116,15 +116,22 @@ def file_upload():
 
     elif allowed_file(original_name):
         # Otros archivos no XLS
-        # (para txt) En caso de nombre ocupado: Responder que no es posible DESPUES
-        # (para txt) En caso de nombre no ocupado: Crear una nueva: Responder que se ha creado una nueva base de datos DESPUES
-        status = "error"
-        text = "No se soporta este formato"
+        file.save(os.path.join("data", filename))
+        df = DATABASE.found(name_client, password)
 
-        # file.save(os.path.join("data", filename))
-        # df_other_text, indexs = process_other_text(filename)
-        # filename = ".".join(filename.split(".")[:-1])
-        # save(df_other_text, filename, email, password, False, '', indexs)
+        if df.shape[0] == 1:
+            exist_filename = df.iloc[0].file_name_backend
+            text = "Base de datos concatenada a la anterior con éxito"
+        else:
+            exist_filename = ""
+        
+        try:
+            df_other_text, indexs = process_other_text(filename, exist_filename)
+            DATABASE.save(df_other_text, name_client, password, exist_filename, indexs, False)
+                
+        except Exception as e:
+            status = "error"
+            text = "Error con el archivo: {}".format(e)
 
     response = Response(json.dumps({"status": status, "message": text}),
                         status=200,
@@ -161,8 +168,8 @@ def search_document_multiples_words():
     bad_words = [x.lower() for x in json.loads(request.form.get('badWords', '[]'))]
     teacher = request.form.get('teacher', '')
     sigle = request.form.get('sigle', '')
-
-    new_documents = search_by_words(words, wordsOr, df, good_words, bad_words, teacher, sigle, indexs)
+    is_teacher_pool = request.form.get('is_teacher_pool', '') == "True" 
+    new_documents = search_by_words(words, wordsOr, df, good_words, bad_words, teacher, sigle, indexs, is_teacher_pool)
 
     response = Response(json.dumps(new_documents),
                         status=200,
@@ -226,6 +233,14 @@ def apply_lda():
         data, _, is_encuesta = DATABASE.load_file(database)
     except IndexError:
         response = Response(json.dumps({"result": [], "status": "error", "message": "La base de datos no existe"}),
+                            status=200,
+                            mimetype='application/json'
+                            )
+        return response                  
+    
+    except Exception as e:
+        print(e)
+        response = Response(json.dumps({"result": [], "status": "error", "message": "Hubo un error con esta base de datos."}),
                             status=200,
                             mimetype='application/json'
                             )
