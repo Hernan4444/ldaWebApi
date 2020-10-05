@@ -168,7 +168,7 @@ def search_document_multiples_words():
     bad_words = [x.lower() for x in json.loads(request.form.get('badWords', '[]'))]
     teacher = request.form.get('teacher', '')
     sigle = request.form.get('sigle', '')
-    is_teacher_pool = request.form.get('is_teacher_pool', '') == "True" 
+    is_teacher_pool = request.form.get('is_teacher_pool', '') == "true" 
     new_documents = search_by_words(words, wordsOr, df, good_words, bad_words, teacher, sigle, indexs, is_teacher_pool)
 
     response = Response(json.dumps(new_documents),
